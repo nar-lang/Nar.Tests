@@ -1,0 +1,89 @@
+module Oak.Tests.Runner
+
+import Oak.Core.Basics exposing *
+import Oak.Core.List exposing (List)
+import Oak.Core.String exposing (String, (<>))
+import Oak.Core.Maybe exposing (Maybe)
+import Oak.Core.Debug
+import Oak.Tests.Test exposing (Test, Result)
+import Oak.Tests.Expect exposing (Expectation)
+import Oak.Tests.Reason exposing (Reason)
+
+data TestResult
+  = TestPassed
+  | TestFailed(List[(String, Reason)])
+  | LabeledResult(String, TestResult)
+  | BatchResult(List[TestResult])
+  | TestSkipped
+
+def run(test: Test): TestResult =
+  let isFailed(r: Expectation): Bool =
+        select r
+          case Expect.Pass -> False
+          case Expect.Fail(_,_,_) -> True
+  let runTest(test: Test): TestResult =
+    select test
+      case UnitTest(thunk) ->
+        let failedTests = List.filter(isFailed, thunk( () ))
+        in
+          if List.isEmpty(failedTests) then
+            let toResult(expectation) =
+              select expectation
+                case Fail(_, msg, reason) -> (msg, reason)
+                case _ -> ("should not happen", Custom)
+            in
+              TestFailed(List.map(toResult, failedTests))
+          else
+            TestPassed
+      case BatchOfTests(subtests) ->
+        BatchResult(List.map(runTest, subtests))
+      case LabeledTest(label, subtest) ->
+        LabeledResult(label, runTest(subtest))
+      case OnlyTest(subtest) ->
+        runTest(subtest)
+      case SkippedTest(_) ->
+        TestSkipped
+  let onlyTest(test: Test, found: Maybe[Test]): Maybe[Test] =
+    select found
+      case Just(_) -> found
+      case Nothing ->
+        select test
+          case UnitTest(_) -> Nothing
+          case BatchOfTests(subtests) -> List.foldl( onlyTest, Nothing, subtests )
+          case LabeledTest(_, subtest) -> onlyTest(subtest, Nothing)
+          case OnlyTest(subtest) -> Just(subtest)
+          case SkippedTest(_) -> Nothing
+  in
+    select onlyTest(test, Nothing)
+      case Just(only) -> runTest(only)
+      case Nothing -> runTest(test)
+
+
+def runScript(test: Test): (List[String]): Int =
+  let stringifyResult(offset: Int, result: TestResult): String =
+    let indent = String.repeat(offset, "  ")
+    in
+      select result
+        case TestPassed -> indent <> "Passed"
+        case TestFailed(failedTests) ->
+          let stringifyFailedTest((msg, reason)) =
+            indent <> "Failed: " <> msg <> " (" <> Reason.toString(reason) <> ")"
+          in
+            String.join("\n", List.map(stringifyFailedTest, failedTests))
+        case LabeledResult(label, subresult) ->
+          indent <> label <> "\n" <> stringifyResult(offset + 1, subresult)
+        case BatchResult(subresults) ->
+          String.join("\n", List.map(stringifyResult(offset + 1), subresults))
+        case TestSkipped -> indent <> "Skipped"
+  let isOk(result: TestResult): Bool =
+    select result
+      case TestPassed -> True
+      case TestFailed(_) -> False
+      case LabeledResult(_, subresult) -> isOk(subresult)
+      case BatchResult(subresults) -> List.all(isOk, subresults)
+      case TestSkipped -> True
+  in
+    \(_) ->
+      let result = run(test)
+      in
+        Debug.log(stringifyResult(0, result), if isOk(result) then 0 else 1)

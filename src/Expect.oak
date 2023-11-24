@@ -1,0 +1,236 @@
+module Oak.Tests.Expect
+
+import Oak.Core.Basics exposing *
+import Oak.Core.String exposing (String, (<>))
+import Oak.Core.List exposing (List, (|))
+import Oak.Core.Dict exposing (Dict)
+import Oak.Core.Set exposing (Set)
+import Oak.Core.Result exposing (Result)
+import Oak.Core.Maybe exposing (Maybe)
+import Oak.Core.Debug
+import Oak.Tests.Reason exposing *
+
+data Expectation
+  = Pass
+  | Fail(given: Maybe[String], description: String, reason: Reason)
+
+def hidden failWithReason(description: String, reason: Reason): Expectation =
+  Fail(Nothing, description, reason)
+
+def hidden withGiven(newGiven: String, expectation: Expectation): Expectation =
+  select expectation
+    case Fail(_, description, failure) ->
+      Fail(Just(newGiven), description, failure)
+    case Pass(_) ->
+      expectation
+
+def pass : Expectation =
+    Pass
+
+def equal: (a, a): Expectation =
+    equateWith("Expect.equal", (==))
+
+def notEqual: (a, a): Expectation =
+    equateWith("Expect.notEqual", (/=))
+
+def lessThan: (cmp, cmp): Expectation =
+    compareWith("Expect.lessThan", (<))
+
+def atMost: (cmp, cmp): Expectation =
+    compareWith("Expect.atMost", (<=))
+
+def greaterThan: (cmp, cmp): Expectation =
+    compareWith("Expect.greaterThan", (>))
+
+def atLeast: (cmp, cmp): Expectation =
+    compareWith("Expect.atLeast", (>=))
+
+data FloatingPointTolerance
+    = Absolute(Float)
+    | Relative(Float)
+    | AbsoluteOrRelative(Float, Float)
+
+def within(tolerance: FloatingPointTolerance, lower: Float, upper: Float): Expectation =
+  nonNegativeToleranceError(
+    tolerance,
+    "within",
+    compareWith("Expect.within " <> Debug.toString(tolerance), withinCompare(tolerance), lower, upper))
+
+def notWithin(tolerance: FloatingPointTolerance, lower: Float, upper: Float): Expectation =
+  nonNegativeToleranceError(
+    tolerance,
+    "notWithin",
+    compareWith(
+      "Expect.notWithin " <> Debug.toString(tolerance),
+      \(a, b) -> not(withinCompare(tolerance, a, b)),
+      lower,
+      upper))
+
+def ok(result: Result[a,b]): Expectation =
+    select result
+        case Ok(_) ->
+            pass
+        case Err(_) ->
+          failWithReason("Expect.ok", Comparison("Ok _", Debug.toString(result)))
+
+
+def err(result: Result[a, b]): Expectation =
+    select result
+        case Ok(_) ->
+          failWithReason("Expect.err", Comparison("Err _", Debug.toString(result)))
+        case Err(_) ->
+            pass
+
+def equalLists(expected: List[a], actual: List[a]): Expectation =
+    if expected == actual then
+        pass
+    else
+        failWithReason(
+          "Expect.equalLists",
+          ListDiff(List.map(Debug.toString, expected), List.map(Debug.toString, actual))
+        )
+
+def equalDicts(expected: Dict[cmp, a], actual: Dict[cmp, a]): Expectation =
+    if Dict.toList(expected) == Dict.toList(actual) then
+        pass
+    else
+        let differ(dict, k, v, diffs) =
+          if Dict.get(k, dict) == Just(v) then
+              diffs
+          else
+              ( k, v ) | diffs
+        let missingKeys =
+          Dict.foldr(differ(actual), [], expected)
+        let extraKeys =
+          Dict.foldr(differ(expected), [], actual)
+        in
+          reportCollectionFailure("Expect.equalDicts", expected, actual, missingKeys, extraKeys)
+
+def equalSets(expected:Set[cmp], actual:Set[cmp]): Expectation =
+    if Set.toList(expected) == Set.toList(actual) then
+        pass
+    else
+        let missingKeys =
+          Set.diff(expected, actual)
+          |> Set.toList
+        let extraKeys =
+          Set.diff(actual, expected)
+          |> Set.toList
+        in
+          reportCollectionFailure("Expect.equalSets", expected, actual, missingKeys, extraKeys)
+
+def fail(str: String): Expectation =
+    failWithReason(str, Custom)
+
+def onFail(str: String, expectation: Expectation): Expectation =
+    select expectation
+    case Pass(_) ->
+      expectation
+    case Fail(given, description, _) ->
+      Fail(given, str, Custom)
+
+def all(list:List[(subject):Expectation], query: subject): Expectation =
+    if List.isEmpty(list) then
+      failWithReason(
+        "Expect.all was given an empty list. You must make at least one expectation to have a valid test!",
+        Invalid(EmptyList)
+      )
+    else
+      allHelp(list, query)
+
+def hidden allHelp(list:List[(subject):Expectation], query: subject): Expectation =
+  select list
+    case [] ->
+      pass
+    case check | rest ->
+      select check(query)
+        case Pass(_) ->
+          allHelp(rest, query)
+        case outcome ->
+          outcome
+
+def hidden reportCollectionFailure(
+  comparison: String, expected: a, actual: b, missingKeys: List[c], extraKeys: List[d]
+): Expectation =
+  failWithReason(
+    comparison,
+    CollectionDiff(
+      Debug.toString(expected),
+      Debug.toString(actual),
+      List.map(Debug.toString, extraKeys),
+      List.map(Debug.toString, missingKeys)
+    )
+  )
+
+def hidden equateWith(reason: String, comparison: (t1, t2): Bool, b: t2, a: t1): Expectation =
+  let isJust(x) =
+    select x
+      case Just(_) -> True
+      case Nothing -> False
+
+  let isFloat(x) =
+    isJust(String.toFloat(x)) && not(isJust(String.toInt(x)))
+
+  let usesFloats =
+    isFloat(Debug.toString(a)) || isFloat(Debug.toString(b))
+
+  let floatError =
+    if String.contains("not", reason) then
+      "Do not use Expect.notEqual with floats. Use Expect.notWithin instead."
+    else
+      "Do not use Expect.equal with floats. Use Expect.within instead."
+  in
+    if usesFloats then
+     fail(floatError)
+    else
+     testWith(Equality, reason, comparison, b, a)
+
+def hidden compareWith: (String, (a,b):Bool, b, a): Expectation =
+    testWith(Comparison)
+
+def hidden testWith(
+  makeReason: (String, String):Reason, label: String, runTest: (a, b):Bool, expected: b,  actual: a
+): Expectation =
+  if runTest(actual, expected) then
+    pass
+  else
+    failWithReason(label, makeReason(Debug.toString(expected), Debug.toString(actual)))
+
+def hidden absolute(tolerance: FloatingPointTolerance): Float =
+    select tolerance
+        case Absolute(val) ->
+            val
+        case AbsoluteOrRelative(val, _) ->
+            val
+        case _ ->
+            0
+
+def hidden relative(tolerance: FloatingPointTolerance): Float =
+    select tolerance
+        case Relative(val) ->
+            val
+        case AbsoluteOrRelative(_, val) ->
+            val
+        case _ ->
+            0
+
+def hidden nonNegativeToleranceError(
+  tolerance: FloatingPointTolerance, name: String, result: Expectation
+): Expectation =
+    if absolute(tolerance) < 0 && relative(tolerance) < 0 then
+        fail("Expect." <> name <> " was given negative absolute and relative tolerances")
+    else if absolute(tolerance) < 0 then
+        fail("Expect." <> name <> " was given a negative absolute tolerance")
+    else if relative(tolerance) < 0 then
+        fail("Expect." <> name <> " was given a negative relative tolerance")
+    else
+        result
+
+def hidden withinCompare(tolerance: FloatingPointTolerance, a: Float, b: Float): Bool =
+    let withinAbsoluteTolerance =
+            a - absolute(tolerance) <= b && b <= a + absolute(tolerance)
+    let withinRelativeTolerance =
+            (a - abs(a * relative(tolerance)) <= b && b <= a + abs(a * relative(tolerance)))
+                || (b - abs(b * relative(tolerance)) <= a && a <= b + abs(b * relative(tolerance)))
+    in
+      (a == b) || withinAbsoluteTolerance || withinRelativeTolerance

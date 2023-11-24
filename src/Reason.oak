@@ -1,0 +1,51 @@
+module Oak.Tests.Reason
+
+import Oak.Core.Basics exposing *
+import Oak.Core.String exposing (String, (<>))
+import Oak.Core.List exposing (List)
+import Oak.Core.Debug
+
+data Reason
+    = Custom
+    | Equality(String, String)
+    | Comparison(String, String)
+    | ListDiff(List[String], List[String])
+    | CollectionDiff(expected: String, actual: String, extra: List[String], missing: List[String])
+    | TODO
+    | Invalid(InvalidReason)
+
+data InvalidReason
+    = EmptyList
+    | BadDescription
+    | DuplicatedName
+
+def toString(reason: Reason): String =
+  let listDiff(expected: List[String], actual: List[String]): String =
+    let extra = List.filter(\(item) -> not(List.member(item, expected)), actual)
+    let missing = List.filter(\(item) -> not(List.member(item, actual)), expected)
+    in
+      "extra: " <> String.join(", ", extra) <> ", missing " <> String.join(", ", missing)
+  in
+    select reason
+      case Custom ->
+        "custom"
+      case Equality(expected, actual) ->
+        "expected " <> expected <> ", got " <> actual
+      case Comparison(expected, actual) ->
+        "comparison " <> expected <> " and " <> actual
+      case ListDiff(expected, actual) ->
+        "expected " <> Debug.toString(expected) <>
+          ", got " <> Debug.toString(actual) <>
+          " (" <> listDiff(expected, actual) <> ")"
+      case CollectionDiff(expected, actual, extra, missing) ->
+        "expected" <> expected <> ", got " <> actual <>
+          " (extra: " <> String.join(", ", extra) <>
+          ", missing " <> String.join(", ", missing) <>")"
+      case TODO -> "TODO"
+      case Invalid(reason) ->
+        let invalidReason = select reason
+              case EmptyList -> "List is empty"
+              case BadDescription -> "Bad description"
+              case DuplicatedName -> "Duplicated name"
+        in
+          "invalid(" <> invalidReason <> ")"

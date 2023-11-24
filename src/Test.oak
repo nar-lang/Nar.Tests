@@ -1,0 +1,105 @@
+module Oak.Tests.Test
+
+import Oak.Core.Basics exposing *
+import Oak.Core.List exposing (List)
+import Oak.Core.Debug
+import Oak.Core.String exposing (String, (<>))
+import Oak.Core.Set exposing (Set)
+import Oak.Core.Result exposing (Result)
+import Oak.Tests.Reason exposing (Reason, InvalidReason)
+import Oak.Tests.Expect exposing (Expectation)
+
+data Test
+  = hidden UnitTest(( () ): List[Expectation])
+  | hidden BatchOfTests(List[Test])
+  | hidden LabeledTest(String, Test)
+  | hidden OnlyTest(Test)
+  | hidden SkippedTest(Test)
+
+def concat(tests: List[Test]): Test =
+    if List.isEmpty(tests) then
+      failNow("This `concat` has no tests in it. Let's give it some!", Invalid(EmptyList))
+    else
+      select duplicatedName(tests)
+        case Err(dups) ->
+          let dupDescription(duped) =
+            "A test group contains multiple tests named '" <> duped <>
+              "'. Do some renaming so that tests have unique names."
+          in
+            failNow(String.join("\n", List.map(dupDescription, Set.toList(dups))), Invalid(DuplicatedName))
+        case Ok(_) ->
+          BatchOfTests(tests)
+
+def describe(untrimmedDesc: String, tests: List[Test]): Test =
+    let desc = String.trim(untrimmedDesc)
+    in
+      if String.isEmpty(desc) then
+        failNow(
+          "This `describe` has a blank description. Let's give it a useful one!",
+          Invalid(BadDescription))
+    else if List.isEmpty(tests) then
+      failNow(
+        "This `describe " <> desc <> "` has no tests in it. Let's give it some!",
+        Invalid(EmptyList))
+    else
+      select duplicatedName(tests)
+        case Err(dups) ->
+          let dupDescription(duped) =
+            "Contains multiple tests named '" <> duped <>
+            "'. Let's rename them so we know which is which."
+          in
+            LabeledTest(desc,
+              failNow(
+                String.join("\n", List.map(dupDescription, Set.toList(dups))),
+                Invalid(DuplicatedName)))
+        case Ok(childrenNames) ->
+          if Set.member(desc, childrenNames) then
+            LabeledTest(desc,
+              failNow(
+                "The test '" <> desc <> "' contains a child test of the same name. "<>
+                  "Let's rename them so we know which is which.",
+                Invalid(DuplicatedName)))
+          else
+            LabeledTest(desc, BatchOfTests(tests))
+
+def test(untrimmedDesc: String, thunk: ( () ):Expectation): Test =
+  let desc = String.trim(untrimmedDesc)
+  in
+    if String.isEmpty(desc) then
+      failNow("This test has a blank description. Let's give it a useful one!", Invalid(BadDescription))
+    else
+      LabeledTest(desc, UnitTest(\(_) -> [ thunk( () ) ]))
+
+def todo(desc: String): Test =
+  failNow(desc, TODO)
+
+def only: (Test): Test =
+  OnlyTest
+
+def skip: (Test): Test =
+  SkippedTest
+
+def hidden duplicatedName(tests: List[Test]): Result[Set[String], Set[String]] =
+  let names(test:Test): List[String] =
+    select test
+      case LabeledTest(str, _) -> [ str ]
+      case BatchOfTests(subtests) -> List.concatMap(names, subtests)
+      case UnitTest(_) -> []
+      case SkippedTest(subTest) -> names(subTest)
+      case OnlyTest(subTest) -> names(subTest)
+  let accumDuplicates(newName: String, ( dups: Set[String], uniques: Set[String] )): (Set[String], Set[String]) =
+    if Set.member(newName, uniques) then
+      ( Set.insert(newName, dups), uniques )
+    else
+      ( dups, Set.insert(newName, uniques) )
+  let ( dupsAccum, uniquesAccum ) =
+    List.concatMap(names, tests)
+      |> List.foldl(accumDuplicates, ( Set.empty, Set.empty ))
+  in
+    if Set.isEmpty(dupsAccum) then
+      Ok(uniquesAccum)
+    else
+      Err(dupsAccum)
+
+def hidden failNow(msg: String, reason: Reason): Test =
+  UnitTest(\(_) -> [ Expect.failWithReason(msg, reason) ])
