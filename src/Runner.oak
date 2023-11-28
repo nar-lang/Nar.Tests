@@ -27,14 +27,14 @@ def run(test: Test): TestResult =
         let failedTests = List.filter(isFailed, thunk( () ))
         in
           if List.isEmpty(failedTests) then
+            TestPassed
+          else
             let toResult(expectation) =
               select expectation
                 case Fail(_, msg, reason) -> (msg, reason)
                 case _ -> ("should not happen", Custom)
             in
               TestFailed(List.map(toResult, failedTests))
-          else
-            TestPassed
       case BatchOfTests(subtests) ->
         BatchResult(List.map(runTest, subtests))
       case LabeledTest(label, subtest) ->
@@ -49,8 +49,8 @@ def run(test: Test): TestResult =
       case Nothing ->
         select test
           case UnitTest(_) -> Nothing
-          case BatchOfTests(subtests) -> List.foldl( onlyTest, Nothing, subtests )
-          case LabeledTest(_, subtest) -> onlyTest(subtest, Nothing)
+          case BatchOfTests(subtests) -> List.foldl( onlyTest, found, subtests )
+          case LabeledTest(_, subtest) -> onlyTest(subtest, found)
           case OnlyTest(subtest) -> Just(subtest)
           case SkippedTest(_) -> Nothing
   in
@@ -59,7 +59,7 @@ def run(test: Test): TestResult =
       case Nothing -> runTest(test)
 
 
-def runScript(test: Test): (List[String]): Int =
+def runDebugLogged(test: Test): TestResult =
   let stringifyResult(offset: Int, result: TestResult): String =
     let indent = String.repeat(offset, "  ")
     in
@@ -75,15 +75,23 @@ def runScript(test: Test): (List[String]): Int =
         case BatchResult(subresults) ->
           String.join("\n", List.map(stringifyResult(offset + 1), subresults))
         case TestSkipped -> indent <> "Skipped"
-  let isOk(result: TestResult): Bool =
-    select result
-      case TestPassed -> True
-      case TestFailed(_) -> False
-      case LabeledResult(_, subresult) -> isOk(subresult)
-      case BatchResult(subresults) -> List.all(isOk, subresults)
-      case TestSkipped -> True
+  let isOk(passed: Bool, result: TestResult): Bool =
+    if not(passed) then
+      False
+    else
+      select result
+        case TestPassed -> True
+        case TestFailed(_) -> False
+        case LabeledResult(_, subresult) -> isOk(passed, subresult)
+        case BatchResult(subresults) -> List.all(isOk(passed), subresults)
+        case TestSkipped -> True
   in
-    \(_) ->
-      let result = run(test)
-      in
-        Debug.log(stringifyResult(0, result), if isOk(result) then 0 else 1)
+    let result = run(test)
+    let _ = Debug.log(
+      stringifyResult(0, result),
+      if isOk(True, result) then
+        "\n\nTests passed"
+      else
+        "\n\nTests failed"
+    )
+    in result

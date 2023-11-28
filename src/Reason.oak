@@ -30,7 +30,7 @@ def toString(reason: Reason): String =
       case Custom ->
         "custom"
       case Equality(expected, actual) ->
-        "expected " <> expected <> ", got " <> actual
+         expected <> ", " <> actual
       case Comparison(expected, actual) ->
         "comparison " <> expected <> " and " <> actual
       case ListDiff(expected, actual) ->
