@@ -1,6 +1,7 @@
 module Oak.Tests.Runner
 
 import Oak.Core.Basics exposing *
+import Oak.Core.Math exposing ((+),(-),(*),(/))
 import Oak.Core.List exposing (List)
 import Oak.Core.String exposing (String, (<>))
 import Oak.Core.Maybe exposing (Maybe)
@@ -64,14 +65,18 @@ def runDebugLogged(test: Test): TestResult =
     let indent = String.repeat(offset, "  ")
     in
       select result
-        case TestPassed -> indent <> "Passed"
+        case TestPassed -> indent <> "✅"
         case TestFailed(failedTests) ->
           let stringifyFailedTest((msg, reason)) =
-            indent <> "Failed: " <> msg <> " (" <> Reason.toString(reason) <> ")"
+            indent <> "❗️ " <> msg <> " " <> Reason.toString(reason)
           in
             String.join("\n", List.map(stringifyFailedTest, failedTests))
         case LabeledResult(label, subresult) ->
-          indent <> label <> "\n" <> stringifyResult(offset + 1, subresult)
+          (select subresult
+            case TestPassed -> indent <> "✅ " <> label
+            case TestFailed(failedTests) -> indent <> "⛔️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
+            case subtest -> indent <> label <> "\n" <> stringifyResult(offset + 1, subresult)
+          )
         case BatchResult(subresults) ->
           String.join("\n", List.map(stringifyResult(offset + 1), subresults))
         case TestSkipped -> indent <> "Skipped"
@@ -88,10 +93,10 @@ def runDebugLogged(test: Test): TestResult =
   in
     let result = run(test)
     let _ = Debug.log(
-      stringifyResult(0, result),
       if isOk(True, result) then
-        "\n\nTests passed"
+        "✅ Tests passed\n\n"
       else
-        "\n\nTests failed"
+        "⛔️ Tests failed\n\n",
+      stringifyResult(0, result)
     )
     in result
