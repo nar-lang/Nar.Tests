@@ -62,7 +62,7 @@ def run(test: Test): TestResult =
 
 def runDebugLogged(test: Test): TestResult =
   let stringifyResult(offset: Int, result: TestResult): String =
-    let indent = String.repeat(offset, "  ")
+    let indent = String.repeat(offset, " ")
     in
       select result
         case TestPassed -> indent <> "✅"
@@ -75,7 +75,7 @@ def runDebugLogged(test: Test): TestResult =
           (select subresult
             case TestPassed -> indent <> "✅ " <> label
             case TestFailed(failedTests) -> indent <> "⛔️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
-            case subtest -> indent <> label <> "\n" <> stringifyResult(offset + 1, subresult)
+            case subtest -> indent <> "⚪️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
           )
         case BatchResult(subresults) ->
           String.join("\n", List.map(stringifyResult(offset + 1), subresults))
