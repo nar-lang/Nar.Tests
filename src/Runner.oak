@@ -1,7 +1,7 @@
 module Oak.Tests.Runner
 
 import Oak.Core.Basics exposing *
-import Oak.Core.Math exposing ((+),(-),(*),(/))
+import Oak.Core.Math exposing ((+), (-), (*), (/), Int)
 import Oak.Core.List exposing (List)
 import Oak.Core.String exposing (String, (<>))
 import Oak.Core.Maybe exposing (Maybe)
@@ -59,6 +59,10 @@ def run(test: Test): TestResult =
       case Just(only) -> runTest(only)
       case Nothing -> runTest(test)
 
+def extern display(result:TestResult): TestResult
+
+def runDisplayed: (Test): TestResult =
+  run ~> display
 
 def runDebugLogged(test: Test): TestResult =
   let stringifyResult(offset: Int, result: TestResult): String =
@@ -74,26 +78,26 @@ def runDebugLogged(test: Test): TestResult =
         case LabeledResult(label, subresult) ->
           (select subresult
             case TestPassed -> indent <> "✅ " <> label
-            case TestFailed(failedTests) -> indent <> "⛔️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
+            case TestFailed(_) -> indent <> "⛔️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
             case subtest -> indent <> "⚪️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
           )
         case BatchResult(subresults) ->
           String.join("\n", List.map(stringifyResult(offset + 1), subresults))
         case TestSkipped -> indent <> "Skipped"
-  let isOk(passed: Bool, result: TestResult): Bool =
+  let isOk(result: TestResult, passed: Bool): Bool =
     if not(passed) then
       False
     else
       select result
         case TestPassed -> True
         case TestFailed(_) -> False
-        case LabeledResult(_, subresult) -> isOk(passed, subresult)
-        case BatchResult(subresults) -> List.all(isOk(passed), subresults)
+        case LabeledResult(_, subresult) -> isOk(subresult, passed)
+        case BatchResult(subresults) -> List.foldr(isOk, passed, subresults)
         case TestSkipped -> True
   in
     let result = run(test)
     let _ = Debug.log(
-      if isOk(True, result) then
+      if isOk(result, True) then
         "✅ Tests passed\n\n"
       else
         "⛔️ Tests failed\n\n",
