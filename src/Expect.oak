@@ -24,6 +24,7 @@ def hidden withGiven(newGiven: String, expectation: Expectation): Expectation =
       Fail(Just(newGiven), description, failure)
     case Pass(_) ->
       expectation
+  end
 
 def pass : Expectation =
     Pass
@@ -73,6 +74,7 @@ def ok(result: Result[a,b]): Expectation =
             pass
         case Err(_) ->
           failWithReason("Expect.ok", Comparison("Ok _", Debug.toString(result)))
+    end
 
 
 def err(result: Result[a, b]): Expectation =
@@ -81,6 +83,7 @@ def err(result: Result[a, b]): Expectation =
           failWithReason("Expect.err", Comparison("Err _", Debug.toString(result)))
         case Err(_) ->
             pass
+    end
 
 def equalLists(expected: List[a], actual: List[a]): Expectation =
     if expected == actual then
@@ -125,10 +128,11 @@ def fail(str: String): Expectation =
 
 def onFail(str: String, expectation: Expectation): Expectation =
     select expectation
-    case Pass(_) ->
-      expectation
-    case Fail(given, description, _) ->
-      Fail(given, str, Custom)
+      case Pass(_) ->
+        expectation
+      case Fail(given, description, _) ->
+        Fail(given, str, Custom)
+    end
 
 def all(list:List[(subject):Expectation], query: subject): Expectation =
     if List.isEmpty(list) then
@@ -149,6 +153,8 @@ def hidden allHelp(list:List[(subject):Expectation], query: subject): Expectatio
           allHelp(rest, query)
         case outcome ->
           outcome
+      end
+  end
 
 def hidden reportCollectionFailure(
   comparison: String, expected: a, actual: b, missingKeys: List[c], extraKeys: List[d]
@@ -168,6 +174,7 @@ def hidden equateWith(reason: String, comparison: (t1, t2): Bool, b: t2, a: t1):
     select x
       case Just(_) -> True
       case Nothing -> False
+    end
 
   let isFloat(x) =
     isJust(String.toFloat(x)) && not(isJust(String.toInt(x)))
@@ -205,6 +212,7 @@ def hidden absolute(tolerance: FloatingPointTolerance): Float =
             val
         case _ ->
             0
+    end
 
 def hidden relative(tolerance: FloatingPointTolerance): Float =
     select tolerance
@@ -214,6 +222,7 @@ def hidden relative(tolerance: FloatingPointTolerance): Float =
             val
         case _ ->
             0
+    end
 
 def hidden nonNegativeToleranceError(
   tolerance: FloatingPointTolerance, name: String, result: Expectation

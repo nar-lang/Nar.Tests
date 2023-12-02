@@ -43,9 +43,12 @@ def toString(reason: Reason): String =
           ", missing " <> String.join(", ", missing) <>")"
       case TODO -> "TODO"
       case Invalid(reason) ->
-        let invalidReason = select reason
+        let invalidReason =
+          select reason
               case EmptyList -> "List is empty"
               case BadDescription -> "Bad description"
               case DuplicatedName -> "Duplicated name"
+          end
         in
           "invalid(" <> invalidReason <> ")"
+    end

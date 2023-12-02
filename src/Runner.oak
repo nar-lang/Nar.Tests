@@ -22,6 +22,7 @@ def run(test: Test): TestResult =
         select r
           case Expect.Pass -> False
           case Expect.Fail(_,_,_) -> True
+        end
   let runTest(test: Test): TestResult =
     select test
       case UnitTest(thunk) ->
@@ -34,6 +35,7 @@ def run(test: Test): TestResult =
               select expectation
                 case Fail(_, msg, reason) -> (msg, reason)
                 case _ -> ("should not happen", Custom)
+              end
             in
               TestFailed(List.map(toResult, failedTests))
       case BatchOfTests(subtests) ->
@@ -44,6 +46,7 @@ def run(test: Test): TestResult =
         runTest(subtest)
       case SkippedTest(_) ->
         TestSkipped
+    end
   let onlyTest(test: Test, found: Maybe[Test]): Maybe[Test] =
     select found
       case Just(_) -> found
@@ -54,10 +57,13 @@ def run(test: Test): TestResult =
           case LabeledTest(_, subtest) -> onlyTest(subtest, found)
           case OnlyTest(subtest) -> Just(subtest)
           case SkippedTest(_) -> Nothing
+        end
+    end
   in
     select onlyTest(test, Nothing)
       case Just(only) -> runTest(only)
       case Nothing -> runTest(test)
+    end
 
 def extern display(result:TestResult): TestResult
 
@@ -76,14 +82,15 @@ def runDebugLogged(test: Test): TestResult =
           in
             String.join("\n", List.map(stringifyFailedTest, failedTests))
         case LabeledResult(label, subresult) ->
-          (select subresult
+          select subresult
             case TestPassed -> indent <> "✅ " <> label
             case TestFailed(_) -> indent <> "⛔️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
             case subtest -> indent <> "⚪️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
-          )
+          end
         case BatchResult(subresults) ->
           String.join("\n", List.map(stringifyResult(offset + 1), subresults))
         case TestSkipped -> indent <> "Skipped"
+    end
   let isOk(result: TestResult, passed: Bool): Bool =
     if not(passed) then
       False
@@ -94,6 +101,7 @@ def runDebugLogged(test: Test): TestResult =
         case LabeledResult(_, subresult) -> isOk(subresult, passed)
         case BatchResult(subresults) -> List.foldr(isOk, passed, subresults)
         case TestSkipped -> True
+      end
   in
     let result = run(test)
     let _ = Debug.log(

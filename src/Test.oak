@@ -29,6 +29,7 @@ def concat(tests: List[Test]): Test =
             failNow(String.join("\n", List.map(dupDescription, Set.toList(dups))), Invalid(DuplicatedName))
         case Ok(_) ->
           BatchOfTests(tests)
+      end
 
 def describe(untrimmedDesc: String, tests: List[Test]): Test =
     let desc = String.trim(untrimmedDesc)
@@ -61,6 +62,7 @@ def describe(untrimmedDesc: String, tests: List[Test]): Test =
                 Invalid(DuplicatedName)))
           else
             LabeledTest(desc, BatchOfTests(tests))
+      end
 
 def test(untrimmedDesc: String, thunk: ( () ):Expectation): Test =
   let desc = String.trim(untrimmedDesc)
@@ -87,6 +89,7 @@ def hidden duplicatedName(tests: List[Test]): Result[Set[String], Set[String]] =
       case UnitTest(_) -> []
       case SkippedTest(subTest) -> names(subTest)
       case OnlyTest(subTest) -> names(subTest)
+    end
   let accumDuplicates(newName: String, ( dups: Set[String], uniques: Set[String] )): (Set[String], Set[String]) =
     if Set.member(newName, uniques) then
       ( Set.insert(newName, dups), uniques )
