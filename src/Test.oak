@@ -5,16 +5,17 @@ import Oak.Core.List exposing (List)
 import Oak.Core.Debug
 import Oak.Core.String exposing (String, (<>))
 import Oak.Core.Set exposing (Set)
+import Oak.Core.Maybe exposing (Maybe)
 import Oak.Core.Result exposing (Result)
 import Oak.Tests.Reason exposing (Reason, InvalidReason)
 import Oak.Tests.Expect exposing (Expectation)
 
 data Test
-  = hidden UnitTest(( () ): List[Expectation])
-  | hidden BatchOfTests(List[Test])
-  | hidden LabeledTest(String, Test)
-  | hidden OnlyTest(Test)
-  | hidden SkippedTest(Test)
+  = UnitTest(( () ): List[Expectation])
+  | BatchOfTests(List[Test])
+  | LabeledTest(String, Test)
+  | OnlyTest(Test)
+  | SkippedTest(Test)
 
 def concat(tests: List[Test]): Test =
     if List.isEmpty(tests) then
@@ -105,4 +106,4 @@ def hidden duplicatedName(tests: List[Test]): Result[Set[String], Set[String]] =
       Err(dupsAccum)
 
 def hidden failNow(msg: String, reason: Reason): Test =
-  UnitTest(\(_) -> [ Expect.failWithReason(msg, reason) ])
+  UnitTest(\(_) -> [ Fail(Nothing, msg, reason) ])
