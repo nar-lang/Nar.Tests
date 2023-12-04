@@ -74,7 +74,7 @@ export default function (runtime) {
             ".failed{color: red;} " +
             ".skipped{color: grey;} " +
             "body.passed {color: black; background-color: #eefff3;} " +
-            "body.failed {color: black; background-color: #fff3ee;} ",
+            "body.failed {color: black; background-color: #ffd3ce;} ",
             "style");
 
         return result
