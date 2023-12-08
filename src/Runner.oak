@@ -23,6 +23,18 @@ def run(test: Test): TestResult =
           case Expect.Pass -> False
           case Expect.Fail(_,_,_) -> True
         end
+  let skipTest(test: Test): TestResult =
+    select test
+      case UnitTest(_) -> TestSkipped
+      case BatchOfTests(subtests) ->
+        BatchResult(List.map(skipTest, subtests))
+      case LabeledTest(label, subtest) ->
+        LabeledResult(label, skipTest(subtest))
+      case OnlyTest(subtest) ->
+        skipTest(subtest)
+      case SkippedTest(subtest) ->
+        skipTest(subtest)
+    end
   let runTest(test: Test): TestResult =
     select test
       case UnitTest(thunk) ->
@@ -44,8 +56,8 @@ def run(test: Test): TestResult =
         LabeledResult(label, runTest(subtest))
       case OnlyTest(subtest) ->
         runTest(subtest)
-      case SkippedTest(_) ->
-        TestSkipped
+      case SkippedTest(subtest) ->
+        skipTest(subtest)
     end
   let onlyTest(test: Test, found: Maybe[Test]): Maybe[Test] =
     select found

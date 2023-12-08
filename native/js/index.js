@@ -36,21 +36,21 @@ export default function (runtime) {
             switch (result.name) {
                 case "Oak.Tests.Runner.TestResult#TestPassed":
                     node(indent + "✅", "div", "passed");
-                    return passed
+                    return passed;
                 case "Oak.Tests.Runner.TestResult#TestFailed":
                     runtime.unwrapShallow(result.values[0]).forEach(x => {
                         showFailed(indent, x.value[0], x.value[1]);
                     });
-                    return false
+                    return false;
                 case "Oak.Tests.Runner.TestResult#LabeledResult":
                     switch (result.values[1].name) {
                         case "Oak.Tests.Runner.TestResult#TestPassed":
                             node(indent + "✅ " + result.values[0].value, "div", "passed");
-                            return passed
+                            return passed;
                         case "Oak.Tests.Runner.TestResult#TestFailed":
                             node(indent + "⛔️ " + result.values[0].value, "div", "failed");
                             show(offset + 1, passed, result.values[1])
-                            return false
+                            return false;
                         default:
                             node(indent + "⚪️ " + result.values[0].value, "div");
                             return show(offset + 1, passed, result.values[1]);
@@ -58,8 +58,8 @@ export default function (runtime) {
                 case "Oak.Tests.Runner.TestResult#BatchResult":
                     return runtime.unwrapShallow(result.values[0]).reduce(show.bind(this, offset + 1), passed);
                 case "Oak.Tests.Runner.TestResult#TestSkipped":
-                    node(indent + "Skipped", "div", "skipped");
-                    return passed
+                    node(indent + "✖️ Skipped", "div", "skipped");
+                    return passed;
             }
         }
 
