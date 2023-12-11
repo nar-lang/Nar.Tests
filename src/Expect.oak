@@ -22,7 +22,7 @@ def hidden withGiven(newGiven: String, expectation: Expectation): Expectation =
   select expectation
     case Fail(_, description, failure) ->
       Fail(Just(newGiven), description, failure)
-    case Pass(_) ->
+    case Pass ->
       expectation
   end
 
@@ -128,7 +128,7 @@ def fail(str: String): Expectation =
 
 def onFail(str: String, expectation: Expectation): Expectation =
     select expectation
-      case Pass(_) ->
+      case Pass ->
         expectation
       case Fail(given, description, _) ->
         Fail(given, str, Custom)
@@ -149,7 +149,7 @@ def hidden allHelp(list:List[(subject):Expectation], query: subject): Expectatio
       pass
     case check | rest ->
       select check(query)
-        case Pass(_) ->
+        case Pass ->
           allHelp(rest, query)
         case outcome ->
           outcome
