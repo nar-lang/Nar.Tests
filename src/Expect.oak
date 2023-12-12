@@ -11,7 +11,7 @@ import Oak.Core.Maybe exposing (Maybe)
 import Oak.Core.Debug
 import Oak.Tests.Reason exposing *
 
-data Expectation
+type Expectation
   = Pass
   | Fail(given: Maybe[String], description: String, reason: Reason)
 
@@ -47,7 +47,7 @@ def greaterThan: (cmp, cmp): Expectation =
 def atLeast: (cmp, cmp): Expectation =
     compareWith("Expect.atLeast", (>=))
 
-data FloatingPointTolerance
+type FloatingPointTolerance
     = Absolute(Float)
     | Relative(Float)
     | AbsoluteOrRelative(Float, Float)

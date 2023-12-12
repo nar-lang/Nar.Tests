@@ -10,7 +10,7 @@ import Oak.Tests.Test exposing (Test, Result)
 import Oak.Tests.Expect exposing (Expectation)
 import Oak.Tests.Reason exposing (Reason)
 
-data TestResult
+type TestResult
   = TestPassed
   | TestFailed(List[(String, Reason)])
   | LabeledResult(String, TestResult)

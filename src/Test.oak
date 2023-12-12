@@ -10,7 +10,7 @@ import Oak.Core.Result exposing (Result)
 import Oak.Tests.Reason exposing (Reason, InvalidReason)
 import Oak.Tests.Expect exposing (Expectation)
 
-data Test
+type Test
   = UnitTest(( () ): List[Expectation])
   | BatchOfTests(List[Test])
   | LabeledTest(String, Test)
