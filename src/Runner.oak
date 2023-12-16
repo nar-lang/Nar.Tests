@@ -77,7 +77,7 @@ def run(test: Test): TestResult =
       case Nothing -> runTest(test)
     end
 
-def extern display(result:TestResult): TestResult
+def native display(result:TestResult): TestResult
 
 def runDisplayed: (Test): TestResult =
   run ~> display
