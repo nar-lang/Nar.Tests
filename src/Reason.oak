@@ -1,10 +1,5 @@
 module Oak.Tests.Reason
 
-import Oak.Core.Basics exposing *
-import Oak.Core.String exposing (String, (<>))
-import Oak.Core.List exposing (List)
-import Oak.Core.Debug
-
 type Reason
     = Custom
     | Equality(String, String)

@@ -1,16 +1,5 @@
 module Oak.Tests.Expect
 
-import Oak.Core.Basics exposing *
-import Oak.Core.Math exposing ((+),(-),(*),(/), abs, Float)
-import Oak.Core.String exposing (String, (<>))
-import Oak.Core.List exposing (List, (|))
-import Oak.Core.Dict exposing (Dict)
-import Oak.Core.Set exposing (Set)
-import Oak.Core.Result exposing (Result)
-import Oak.Core.Maybe exposing (Maybe)
-import Oak.Core.Debug
-import Oak.Tests.Reason exposing *
-
 type Expectation
   = Pass
   | Fail(given: Maybe[String], description: String, reason: Reason)

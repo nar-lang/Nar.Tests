@@ -1,15 +1,5 @@
 module Oak.Tests.Runner
 
-import Oak.Core.Basics exposing *
-import Oak.Core.Math exposing ((+), (-), (*), (/), Int)
-import Oak.Core.List exposing (List)
-import Oak.Core.String exposing (String, (<>))
-import Oak.Core.Maybe exposing (Maybe)
-import Oak.Core.Debug
-import Oak.Tests.Test exposing (Test, Result)
-import Oak.Tests.Expect exposing (Expectation)
-import Oak.Tests.Reason exposing (Reason)
-
 type TestResult
   = TestPassed
   | TestFailed(List[(String, Reason)])
