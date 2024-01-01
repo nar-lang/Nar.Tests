@@ -1,4 +1,4 @@
-module Oak.Tests.Test
+module Nar.Tests.Test
 
 type Test
   = UnitTest(( () ): List[Expectation])

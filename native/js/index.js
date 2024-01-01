@@ -14,40 +14,40 @@ export default function (runtime) {
                 return false
             }
             switch (result.name) {
-                case "Oak.Tests.Runner.TestResult#TestPassed":
+                case "Nar.Tests.Runner.TestResult#TestPassed":
                     return true
-                case "Oak.Tests.Runner.TestResult#TestFailed":
+                case "Nar.Tests.Runner.TestResult#TestFailed":
                     return false
-                case "Oak.Tests.Runner.TestResult#LabeledResult":
+                case "Nar.Tests.Runner.TestResult#LabeledResult":
                     return isOk(passed, result.values[1])
-                case "Oak.Tests.Runner.TestResult#BatchResult":
+                case "Nar.Tests.Runner.TestResult#BatchResult":
                     return runtime.unwrapShallow(result.values[0]).reduce(isOk, passed);
-                case "Oak.Tests.Runner.TestResult#TestSkipped":
+                case "Nar.Tests.Runner.TestResult#TestSkipped":
                     return true
             }
         }
         const showFailed = (indent, msg, reason) => {
-            const strReason = runtime.execute("Oak.Tests.Reason.toString", reason);
+            const strReason = runtime.execute("Nar.Tests.Reason.toString", reason);
             node(indent + "❗️" + msg.value + " " + strReason.value, "div", "failed");
         }
         const show = (offset, passed, result) => {
             const indent = "  ".repeat(offset);
 
             switch (result.name) {
-                case "Oak.Tests.Runner.TestResult#TestPassed":
+                case "Nar.Tests.Runner.TestResult#TestPassed":
                     node(indent + "✅", "div", "passed");
                     return passed;
-                case "Oak.Tests.Runner.TestResult#TestFailed":
+                case "Nar.Tests.Runner.TestResult#TestFailed":
                     runtime.unwrapShallow(result.values[0]).forEach(x => {
                         showFailed(indent, x.value[0], x.value[1]);
                     });
                     return false;
-                case "Oak.Tests.Runner.TestResult#LabeledResult":
+                case "Nar.Tests.Runner.TestResult#LabeledResult":
                     switch (result.values[1].name) {
-                        case "Oak.Tests.Runner.TestResult#TestPassed":
+                        case "Nar.Tests.Runner.TestResult#TestPassed":
                             node(indent + "✅ " + result.values[0].value, "div", "passed");
                             return passed;
-                        case "Oak.Tests.Runner.TestResult#TestFailed":
+                        case "Nar.Tests.Runner.TestResult#TestFailed":
                             node(indent + "⛔️ " + result.values[0].value, "div", "failed");
                             show(offset + 1, passed, result.values[1])
                             return false;
@@ -55,9 +55,9 @@ export default function (runtime) {
                             node(indent + "⚪️ " + result.values[0].value, "div");
                             return show(offset + 1, passed, result.values[1]);
                     }
-                case "Oak.Tests.Runner.TestResult#BatchResult":
+                case "Nar.Tests.Runner.TestResult#BatchResult":
                     return runtime.unwrapShallow(result.values[0]).reduce(show.bind(this, offset + 1), passed);
-                case "Oak.Tests.Runner.TestResult#TestSkipped":
+                case "Nar.Tests.Runner.TestResult#TestSkipped":
                     node(indent + "✖️ Skipped", "div", "skipped");
                     return passed;
             }
@@ -80,7 +80,7 @@ export default function (runtime) {
         return result
     }
 
-    runtime.register("Oak.Tests.Runner", {
+    runtime.register("Nar.Tests.Runner", {
         display
     });
 }

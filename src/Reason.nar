@@ -1,4 +1,4 @@
-module Oak.Tests.Reason
+module Nar.Tests.Reason
 
 type Reason
     = Custom

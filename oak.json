@@ -1,8 +1,0 @@
-{
-  "name": "Oak.Tests",
-  "version": "1.0",
-  "oak-version": "0.1",
-  "dependencies": [
-    "github.com/oaklang/Oak.Core"
-  ]
-}

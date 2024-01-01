@@ -1,4 +1,4 @@
-module Oak.Tests.Expect
+module Nar.Tests.Expect
 
 type Expectation
   = Pass
