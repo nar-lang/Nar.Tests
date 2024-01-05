@@ -1,0 +1,740 @@
+module Fuzz
+
+type Fuzzer[a] 
+  = hidden FuzzerImpl((PRNG): GenResult[a])
+
+def hidden generate(prng: PRNG, FuzzerImpl(fuzzer): Fuzzer[a]): GenResult[a] =
+  fuzzer(prng)
+
+def unit: Fuzzer[()] =
+  constant(())
+
+def bool: Fuzzer[Bool] =
+  oneOfValues([ False, True ])
+
+def order: Fuzzer[Order] =
+  oneOfValues([ LT, EQ, GT ])
+
+def hidden intBucketingThreshold: Int = 255
+
+def hidden intPreferences: List[{ weight: Int, bits: Int }] =
+  [ { weight = 4, bits = 4 } // 0..15
+  , { weight = 8, bits = 8 } // 0..255
+  , { weight = 2, bits = 16 } // 0..65535 
+  , { weight = 1, bits = 32 } // 0..4294967295
+  ]
+
+def int: Fuzzer[Int] =
+  intPreferences
+    |> List.map(\({ weight, bits }) -> ( weight, intBits(bits) ))
+    |> intFrequency 
+    |> map(
+      \(n) ->
+        let isNegative = 1 & n == 1
+        let withoutFirstBit = n >> 1
+        in
+        if isNegative then -withoutFirstBit else withoutFirstBit
+      )
+
+def intBits(bitsCount: Int): Fuzzer[Int] =
+  uniformInt(toPower(2, bitsCount) - 1)
+
+def intAtLeast(n: Int): Fuzzer[Int] =
+  intRange(n, toPower(2, 32) - 1)
+
+def intAtMost(n : Int): Fuzzer[Int] =
+  intRange( -(toPower(2, 32) - 1), n)
+
+def intRange(lo: Int, hi:Int): Fuzzer[Int] =
+  if hi < lo then
+    intRange(hi, lo)
+  else if lo == hi then
+    constant(lo)
+  else
+    let int_(upperLimit: Int): Fuzzer[Int] =
+      if upperLimit <= intBucketingThreshold then
+        uniformInt(upperLimit) 
+      else
+        let range : Int = upperLimit + 1
+        let maxBits: Int =
+          range
+            |> Math.toFloat
+            |> logBase(2)
+            |> ceil
+            |> Math.toFloat
+            |> logBase(2)
+            |> ceil
+            |> power(2)
+        in
+        intPreferences
+        |> List.filter(\({ bits }) -> bits <= maxBits)
+        |> \(list_) ->
+            if List.isEmpty(list_) then
+                List.take(1, intPreferences)
+            else
+                list_
+        |> List.map(\({ weight, bits }) -> ( weight, intBits(bits) ))
+        |> intFrequency
+        |> map (modBy(range))
+    in
+    if lo >= 0 then
+    int_(hi - lo)
+        |> map( (+)(lo) )
+    else if hi <= 0 then
+    int_(hi - lo)
+        |> map(\(n) -> negate(n) + hi)
+    else
+    oneOf([ intRange(0, hi), intRange(lo, -1) ])
+
+def float: Fuzzer[Float] =
+  intFrequency <|
+    [ ( 1, constant(0) )
+    , ( 5, wellShrinkingFloat )
+    , ( 1, constant(1 / 0) )
+    , ( 1, constant(-1 / 0) )
+    , ( 1, constant(0 / 0) )
+    ]
+
+def niceFloat: Fuzzer[Float] =
+  wellShrinkingFloat
+
+def wellShrinkingFloat: Fuzzer[Float] =
+  map3(
+    \(hi, lo, shouldNegate) ->
+			let f: Float = Fuzz.Float.wellShrinkingFloat( hi, lo )
+			in if shouldNegate then negate(f) else f,
+		int32,
+		int32,
+		bool |> filter(\(n) -> not(isInfinite(n) || isNaN(n)))
+	)
+
+def floatAtLeast(n: Float): Fuzzer[Float] =
+  if n <= 0 then
+    intFrequency <|
+      [ ( 4, floatRange(n, 0) )
+      , ( 4, wellShrinkingFloat |> map(abs) )
+      , ( 2, constant(n) )
+      , ( 2, constant(1 / 0) )
+      , ( 1, constant(0) )
+      ]
+  else
+    intFrequency <|
+      [ ( 8, wellShrinkingFloat |> map (\(x) -> n + abs(x)) )
+      , ( 2, constant(n) )
+      , ( 2, constant (1 / 0) )
+      ]
+
+def floatAtMost(n: Float): Fuzzer[Float] =
+	if n >= 0 then
+		intFrequency <|
+			[ ( 4, floatRange(0, n) )
+			, ( 4, wellShrinkingFloat |> map(negate << abs) )
+			, ( 2, constant(n) )
+			, ( 2, constant(-1 / 0) )
+			, ( 1, constant(0) )
+			]
+	else
+		intFrequency <|
+			[ ( 8, wellShrinkingFloat |> map(\(x) -> n - abs(x)) )
+			, ( 2, constant(n) )
+			, ( 2, constant (-1 / 0) )
+			]
+
+def floatRange(lo: Float, hi: Float): Fuzzer[Float] =
+	if hi < lo then
+		floatRange(hi, lo)
+	else if lo == hi then
+		constant(lo)
+	else if lo >= 0 then
+		intFrequency <|
+			[ ( 1, constant(lo) )
+			, ( 1, constant(hi) )
+			, ( 4, scaledFloat(lo, hi) )
+			]
+    else if hi <= 0 then
+			intFrequency <|
+				[ ( 1, constant(lo) )
+				, ( 1, constant(hi) )
+				, ( 4, scaledFloat(-hi, -lo) |> map((-)))
+				]
+    else
+      intFrequency <|
+				[ ( 1, constant(0) )
+				, ( 2, constant(lo) )
+				, ( 2, constant(hi) )
+				, ( 4, scaledFloat(0, -lo) |> map((-)) )
+				, ( 4, scaledFloat(0, hi) )
+				]
+
+def scaledFloat(lo: Float, hi: Float): Fuzzer[Float] =
+	if lo == hi then 
+		constant(lo)
+	else if lo > hi then
+		scaledFloat(hi, lo)
+	else
+		percentage |> map(\(f) -> f * (hi - lo) + lo)
+
+def percentage: Fuzzer[Float] =
+	intFrequency <|
+		[ ( 1, constant(0) )
+		, ( 1, constant(Fuzz.Float.maxFractionalFloat) )
+		, ( 4, pair(uniformInt(0x000FFFFF), int32) |> map(Fuzz.Float.fractionalFloat))
+		]
+
+def int32: Fuzzer[Int] =
+	uniformInt(0xFFFFFFFF)
+
+def asciiChar: Fuzzer[Char] =
+	intRange(32, 126) |> map(Char.fromCode)
+
+def char: Fuzzer[Char] =
+	let whitespaceChar: Fuzzer[Char] = oneOfValues([' ', '\t' , '\n'])
+	let combiningDiacriticalMarkChar: Fuzzer[Char] =
+		oneOfValues <|
+			[ Char.fromCode(0x0302) // combining circumflex accent
+			, Char.fromCode(0x0303) // combining tilde
+			, Char.fromCode(0x0308) // combining diaeresis
+			]
+    let emojiChar: Fuzzer[Char] = oneOfValues([ '🌈', '❤', '🔥' ])
+    let arbitraryUnicodeChar: Fuzzer[Char] =
+        intRange(0, 0x0010FFFF)
+            |> filter(\(n) -> not(n >= 0xD800 && n <= 0xDFFF))
+            |> map(Char.fromCode)
+    in
+    intFrequency <|
+        [ ( 5, asciiChar )
+        , ( 2, whitespaceChar )
+        , ( 1, combiningDiacriticalMarkChar )
+        , ( 1, emojiChar )
+        , ( 1, arbitraryUnicodeChar )
+        ]
+
+def string : Fuzzer[String] =
+    stringOfLengthBetween(0, 10)
+
+def stringOfLength(n: Int): Fuzzer[String] =
+    stringOfLengthBetween(n, n)
+
+def stringOfLengthBetween(min: Int, max: Int): Fuzzer[String] =
+    if min > max then
+        stringOfLengthBetween(max, min)
+    else if max <= 0 then
+        constant("")
+    else
+        listOfLengthBetween(min, max, char)
+            |> map(String.fromList)
+            |> filter(
+                \(str) ->
+                    let length = String.length(str)
+                    in length >= min && length <= max)
+
+def asciiString: Fuzzer[String] =
+    asciiStringOfLengthBetween(0, 10)
+
+def asciiStringOfLength(n: Int): Fuzzer[String] =
+    asciiStringOfLengthBetween(n, n)
+
+def asciiStringOfLengthBetween(min: Int, max: Int): Fuzzer[String] =
+    listOfLengthBetween(min, max, asciiChar)
+        |> map(String.fromList)
+
+def maybe(fuzzed: Fuzzer[a]): Fuzzer[Maybe[a]] =
+    intFrequency <|
+        [ ( 1, constant(Nothing) )
+        , ( 3, map(Just(fuzzer)) )
+        ]
+
+def result(fuzzerError: Fuzzer[error], fuzzerValue: Fuzzer[value]): Fuzzer[Result[error, value] =
+    intFrequency <|
+        [ ( 1, map(Err(fuzzerError)) )
+        , ( 3, map(Ok(fuzzerValue)) )
+        ]
+
+def list(fuzzer: Fuzzer[a]): Fuzzer[List[a]] =
+    listOfLengthBetween(0, 32, fuzzer)
+
+def listOfLength(n: Int, fuzzer: Fuzzer[a]): Fuzzer[List[a]] =
+    listOfLengthBetween(n, n, fuzzer)
+
+def listOfLengthBetween(lo: Int, hi: Int, itemFuzzer: Fuzzer[a]): Fuzzer[List[a]] =
+    if lo > hi then
+        listOfLengthBetween(hi, lo, itemFuzzer)
+    else if hi <= 0 then
+        constant([])
+    else
+        let average: Float = (Math.toFloat(lo) + Math.toFloat(hi)) / 2
+        let continueProbability: Float = 1 - 1 / (1 + average)
+        let addItem(length: Int, acc: List[a]): Fuzzer[List[a]] =
+            itemFuzzer |> andThen(\(item) -> go(length + 1, item | acc) )
+        let end(acc: List[a]): Fuzzer[List[a]] =
+            constant(List.reverse(acc))
+        let go(length: Int, acc: List[a]): Fuzzer[List[a]] =
+            if length < lo then
+                forcedChoice(1) |> andThen(\(_) -> addItem(length, acc))
+            else if length == hi then
+                forcedChoice(0) |> andThen(\(_) -> end(acc))
+            else
+                weightedBool(continueProbability)
+                    |> andThen(
+                        \(oneMorePlease) ->
+                            if oneMorePlease then
+                                addItem(length, acc)
+                            else 
+                                end(acc)
+                        )
+        in go(0, [])
+
+def array(fuzzer: Fuzzer[a]): Fuzzer[Array[a]] =
+    map(Array.fromList(list(fuzzer)))
+
+def pair(fuzzerA: Fuzzer[a], fuzzerB: Fuzzer[b]): Fuzzer[( a, b )] =
+    map2(\(a, b) -> ( a, b ), fuzzerA, fuzzerB)
+
+def triple(fuzzerA: Fuzzer[a], fuzzerB: Fuzzer[b], fuzzerC: Fuzzer[c]): Fuzzer[( a, b, c )] =
+    map3(\(a, b, c) -> ( a, b, c ), fuzzerA, fuzzerB, fuzzerC)
+
+def constant(x: a): Fuzzer[a] =
+    Fuzzer <|
+        \(prng) -> Generated( { value = x , prng = prng } )
+
+def map(fn: (a):b,  FuzzerImpl(fuzzer): Fuzzer[a]): Fuzzer[b] =
+    Fuzzer <|
+        \(prng) ->
+            select fuzzer(prng)
+                case Generated(g) ->
+                    Generated({ value = fn(g.value), prng = g.prng })
+                case Rejected(r) ->
+                    Rejected(r)
+            end
+
+def map2(
+  fn: (a, b):x, 
+  FuzzerImpl(fuzzerA): Fuzzer[a],
+  FuzzerImpl(fuzzerB): Fuzzer[b]
+): Fuzzer[x] =
+  FuzzerImpl <| \(prng) ->
+    select fuzzerA(prng)
+      case Generated(a) ->
+        select fuzzerB(a.prng)
+          case Generated(b) ->
+            Generated({ value = fn(a.value, b.value), prng = b.prng })
+          case Rejected(r) ->
+              Rejected(r)
+        end
+      case Rejected(r) ->
+        Rejected(r)
+    end
+
+def map3(
+  fn: (a, b):x, 
+  FuzzerImpl(fuzzerA): Fuzzer[a],
+  FuzzerImpl(fuzzerB): Fuzzer[b],
+  FuzzerImpl(fuzzerC): Fuzzer[c]
+): Fuzzer[x] =
+  FuzzerImpl <| \(prng) ->
+    select fuzzerA(prng)
+      case Generated(a) ->
+        select fuzzerB(a.prng)
+          case Generated(b) ->
+            select fuzzerC(b.prng)
+                case Generated(c) ->
+                    Generated({ value = fn(a.value, b.value, c.value), prng = c.prng })
+                case Rejected(r) ->
+                    Rejected(r)
+                end
+          case Rejected(r) ->
+              Rejected(r)
+        end
+      case Rejected(r) ->
+        Rejected(r)
+    end
+
+def map4(
+  fn: (a, b):x, 
+  FuzzerImpl(fuzzerA): Fuzzer[a],
+  FuzzerImpl(fuzzerB): Fuzzer[b],
+  FuzzerImpl(fuzzerC): Fuzzer[c],
+  FuzzerImpl(fuzzerD): Fuzzer[d]
+): Fuzzer[x] =
+  FuzzerImpl <| \(prng) ->
+    select fuzzerA(prng)
+      case Generated(a) ->
+        select fuzzerB(a.prng)
+          case Generated(b) ->
+            select fuzzerC(b.prng)
+                case Generated(c) ->
+                    select fuzzerC(c.prng)
+                        case Generated(d) ->
+                            Generated({ value = fn(a.value, b.value, c.value, d.value), prng = c.prng })
+                        case Rejected(r) ->
+                            Rejected(r)
+                        end
+                case Rejected(r) ->
+                    Rejected(r)
+                end
+          case Rejected(r) ->
+              Rejected(r)
+        end
+      case Rejected(r) ->
+        Rejected(r)
+    end
+
+def andMap: (Fuzzer[a], Fuzzer[(a):b]): Fuzzer[b] =
+    map2((|>))
+
+def frequency(fuzzers: List[( Float, Fuzzer[a] )]): Fuzzer[a] =
+    frequencyHelp("Fuzz.frequency", fuzzers)
+
+def hidden frequencyHelp(functionName: String, fuzzers:List[( Float, Fuzzer[a] )]): Fuzzer[a] =
+    if List.any(\(( w, _ )) -> w < 0, fuzzers) then
+        invalid <| functionName <> ": No frequency weights can be less than 0."
+    else
+        let nonzeroFuzzers = List.filter(\(( w, _ )) -> w > 0, fuzzers)
+        in
+        if List.isEmpty(nonzeroFuzzers) then
+            invalid <| functionName <> ": You must provide at least one frequency pair with weight greater than 0."
+        else
+            let allWeightsAreInts = List.all(\(( w, _ )) -> w == Math.toFloat(round(w)), nonzeroFuzzers)
+            in
+            if allWeightsAreInts then
+                intFrequency(List.map(Tuple.mapFirst(round), nonzeroFuzzers))
+            else
+                let weightSum : Float = List.foldl(\(( w, _ ), acc) -> w + acc, 0, nonzeroFuzzers)
+            in
+            percentage
+                |> andThen(
+                    \(p) ->
+                        let f: Float = p * weightSum
+                        let go(countdown: Float, acc: List[( Float, Fuzzer[a] )]): Fuzzer[a] =
+                            select acc
+                                case [] ->
+                                    invalid <| "elm-test bug: " <> functionName <> " encountered empty list after checking for it."
+                                case [ ( _, last ) ] ->
+                                    last
+                                case ( w, current ) | rest ->
+                                    if countdown <= w then
+                                        current
+                                    else
+                                        go(countdown - w, rest)
+                            end
+                        in
+                        go(f, nonzeroFuzzers)
+                    )
+
+def intFrequency(fuzzers: List[( Int, Fuzzer[a])]): Fuzzer[a] =
+	if List.any(\(( w, _ )) -> w <= 0, fuzzers) then
+		invalid <| "intFrequency: Weights cannot be non-positive"
+	else
+		select fuzzers
+			case ( n, _ ) | rest ->
+				let weightSum: Int = List.foldl(\(( w, _ ), acc) -> w + acc, n, rest)
+				in
+				rollDice(weightSum - 1, intFrequencyGenerator(n, List.map(Tuple.first, rest)))
+					|> andThen
+						(\(i) ->
+							fuzzers
+								|> List.drop(i)
+								|> List.head
+								|> Maybe.map(Tuple.second)
+								|> Maybe.withDefault(invalid <| "elm-test bug: intFrequency index out of range")
+						)
+			case [] ->
+				invalid <| "intFrequency: You must provide at least one item."
+		end
+
+def frequencyValues(values: List[( Float, a )]): Fuzzer[a] =
+	frequencyHelp(
+		"Fuzz.frequencyValues",
+    List.map(Tuple.mapSecond(constant), values)
+	)
+
+def oneOf(fuzzers: List[Fuzzer[a]]): Fuzzer[a] =
+    oneOfHelp("Fuzz.oneOf", "fuzzer", fuzzers)
+
+def oneOfHelp(functionName: String, itemName: String, fuzzers: List[Fuzzer[a]]): Fuzzer[a] =
+	select List.length(fuzzers)
+		case 0 ->
+			invalid <| functionName <> ": You must provide at least one item."
+		case length ->
+			uniformInt(length - 1)
+				|> andThen
+					(\(i) ->
+							select List.getAt(i, fuzzers)
+								case Nothing ->
+									invalid <| "elm-test bug: " <> functionName <> " didn't find a " <> itemName <> " at position " ++ String.fromInt(i) <> " in the list of length " <> String.fromInt(length) <> "."
+								case Just(fuzzer) ->
+									fuzzer
+							end
+					)
+		end
+
+def oneOfValues(values: List[a]): Fuzzer[a] =
+    oneOfHelp("Fuzz.oneOfValues", "value", List.map(constant, values))
+
+def invalid(reason: String): Fuzzer[a] =
+	FuzzerImpl(\(prng) -> Rejected({ reason = reason , prng = prng }))
+
+def filter(predicate:(a):Bool, fuzzer: Fuzzer[a]): Fuzzer[a] =
+	let go(rejectionCount: Int): Fuzzer[a] =
+		if rejectionCount > 15 then
+			invalid("Too many values were filtered out")
+		else
+			fuzzer
+				|> andThen
+					(\(value) ->
+							if predicate(value) then
+									constant(value)
+							else
+									go (rejectionCount + 1)
+					)
+    in
+    go(0)
+
+def andThen(fn : (a): Fuzzer[b], FuzzerImpl(fuzzer): Fuzzer[a]): Fuzzer[b] =
+    FuzzerImpl <|
+        \(prng) ->
+            select fuzzer(prng)
+                case Generated(g) ->
+                    let Fuzzer(newFuzzer) = fn(g.value)
+                    in newFuzzer(g.prng)
+                case Rejected(r) ->
+                    Rejected(r)
+            end
+
+def lazy(thunk: ():Fuzzer[a]): Fuzzer[a] =
+	FuzzerImpl <|
+		\(prng) ->
+				let FuzzerImpl(fuzzer) = thunk(())
+				in fuzzer(prng)
+
+def shuffledList(items: List[a]): Fuzzer[List[a]] =
+	items
+		|> traverse(\(item) -> int |> map(\(index) -> ( index, item )))
+		|> map
+			(\(listWithIndexes) ->
+					listWithIndexes
+							|> List.sortBy(Tuple.first)
+							|> List.map(Tuple.second)
+			)
+
+def sequence(fuzzers: List[Fuzzer[a]]): Fuzzer[List[a]] =
+  List.foldr(map2((|)), constant([]), fuzzers)
+
+def traverse(toFuzzer: (a):Fuzzer[b], items: List[a]): Fuzzer[List[b]] =
+  sequence(List.map(toFuzzer, items))
+
+def uniformInt(n: Int): Fuzzer[Int] =
+  rollDice(n, Random.int(0, n))
+
+def weightedBool(p: Float): Fuzzer[Bool] =
+	(if p <= 0 then
+		forcedChoice(0)
+	else if p >= 1 then
+		forcedChoice(1)
+	else
+		rollDice(1, weightedBoolGenerator(p))
+	) 
+		|> map(intToBool)
+
+def rollDice(maxValue: Int, diceGenerator: Random.Generator[Int]): Fuzzer[Int] =
+	Fuzzer <|
+		\(prng) ->
+			select prng
+				case Random(r) ->
+					let ( diceRoll, newSeed ) = Random.step(diceGenerator, r.seed)
+					in
+					if diceRoll < 0 then
+							Rejected(
+									{ reason = "elm-test bug: generated a choice < 0"
+									, prng = prng
+									})
+					else if diceRoll > maxValue then
+							Rejected(
+									{ reason = "elm-test bug: generated a choice > maxChoice"
+									, prng = prng
+									})
+					else Generated(
+									{ value = diceRoll
+									, prng =
+											Random(
+													{ seed = newSeed
+													, run = RandomRun.append(diceRoll, r.run)
+													})
+									})
+				case Hardcoded(h) ->
+					select RandomRun.nextChoice(h.unusedPart)
+						case Nothing ->
+									Rejected(
+											{ reason = "elm-test internals: hardcoded PRNG run out of numbers"
+											, prng = prng
+											})
+						case Just ( hardcodedChoice, restOfChoices ) ->
+									if hardcodedChoice < 0 then
+											Rejected(
+													{ reason = "elm-test internals: generated a choice < 0"
+													, prng = prng
+													})
+									else if hardcodedChoice > maxValue then
+											Rejected(
+													{ reason = "elm-test internals: generated a choice > maxChoice"
+													, prng = prng
+													})
+									else
+											Generated(
+													{ value = hardcodedChoice
+													, prng = Hardcoded({ h | unusedPart = restOfChoices })
+													})
+					end
+			end
+
+def forcedChoice(n: Int): Fuzzer[Int] =
+	Fuzzer <|
+		\(prng) ->
+			if n < 0 then
+				Rejected(
+					{ reason = "elm-test bug: forcedChoice: n < 0"
+					, prng = prng
+					})
+			else
+				select prng
+					case Random(r) ->
+								Generated(
+										{ value = n
+										, prng = Random({ r | run = RandomRun.append(n, r.run) })
+										})
+
+					case Hardcoded(h) ->
+						select RandomRun.nextChoice(h.unusedPart)
+							case Nothing ->
+								Rejected(
+												{ reason = "elm-test internals: hardcoded PRNG run out of numbers"
+												, prng = prng
+												})
+							case Just ( hardcodedChoice, restOfChoices ) ->
+								if hardcodedChoice != n then
+									Rejected(
+										{ reason = "elm-test internals: hardcoded value was not the same as the forced one"
+										, prng = prng
+										})
+									else
+										Generated(
+											{ value = n
+											, prng = Hardcoded({ h | unusedPart = restOfChoices })
+											})
+						end
+				end
+
+def intToBool(n: Int): Bool =
+  n != 0
+
+weightedBoolGenerator : Float -> Random.Generator Int
+weightedBoolGenerator p =
+    Random.float 0 1
+        |> Random.map
+            (\f ->
+                if f <= p then
+                    1
+
+                else
+                    0
+            )
+
+
+intFrequencyGenerator : Int -> List Int -> Random.Generator Int
+intFrequencyGenerator w1 ws =
+    Random.weighted
+        ( toFloat w1, 0 )
+        (List.indexedMap (\i w -> ( toFloat w, i + 1 )) ws)
+
+examples : Int -> Fuzzer a -> List a
+examples n fuzzer =
+    case
+        Fuzz.Internal.generate
+            (PRNG.random (Random.initialSeed n))
+            (listOfLength n fuzzer)
+    of
+        Generated { value } ->
+            value
+
+        Rejected _ ->
+            []
+
+labelExamples : Int -> List ( String, a -> Bool ) -> Fuzzer a -> List ( List String, Maybe a )
+labelExamples n labels fuzzer =
+    case
+        Fuzz.Internal.generate
+            (PRNG.random (Random.initialSeed n))
+            (listOfLength n fuzzer)
+    of
+        Generated { value } ->
+            let
+                foundExamples : Dict (List String) a
+                foundExamples =
+                    value
+                        |> List.foldl
+                            (\item acc ->
+                                let
+                                    categories : List String
+                                    categories =
+                                        labels
+                                            |> List.filterMap
+                                                (\( label, predicate ) ->
+                                                    if predicate item then
+                                                        Just label
+
+                                                    else
+                                                        Nothing
+                                                )
+                                in
+                                if List.isEmpty categories then
+                                    acc
+
+                                else
+                                    acc
+                                        |> Dict.update categories
+                                            (\maybeExample ->
+                                                case maybeExample of
+                                                    Nothing ->
+                                                        Just item
+
+                                                    Just original ->
+                                                        Just original
+                                            )
+                            )
+                            Dict.empty
+
+                combinations : List ( List String, a )
+                combinations =
+                    foundExamples
+                        |> Dict.filter (\k _ -> List.length k > 1)
+                        |> Dict.toList
+            in
+            List.filterMap
+                (\( label, _ ) ->
+                    case Dict.get [ label ] foundExamples of
+                        Nothing ->
+                            if Dict.any (\k _ -> List.member label k) foundExamples then
+                                -- don't show this example: all its occurences were included in combination with some other label
+                                Nothing
+
+                            else
+                                -- show that we didn't find it (in any combination nor alone)
+                                Just ( [ label ], Nothing )
+
+                        Just example ->
+                            Just ( [ label ], Just example )
+                )
+                labels
+                ++ List.map (\( label, example ) -> ( label, Just example )) combinations
+
+        Rejected _ ->
+            []
+
+fromGenerator : Random.Generator a -> Fuzzer a
+fromGenerator generator =
+    int32
+        |> map
+            (\seed ->
+                Random.step generator (Random.initialSeed seed)
+                    |> Tuple.first
+            )
