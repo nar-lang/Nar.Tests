@@ -22,7 +22,7 @@ def equal: (a, a): Expectation =
     equateWith("Expect.equal", (==))
 
 def notEqual: (a, a): Expectation =
-    equateWith("Expect.notEqual", (/=))
+    equateWith("Expect.notEqual", (!=))
 
 def lessThan: (cmp, cmp): Expectation =
     compareWith("Expect.lessThan", (<))
