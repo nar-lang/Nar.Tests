@@ -81,7 +81,7 @@ def hidden duplicatedName(tests: List[Test]): Result[Set[String], Set[String]] =
       case SkippedTest(subTest) -> names(subTest)
       case OnlyTest(subTest) -> names(subTest)
     end
-  let accumDuplicates(newName: String, ( dups: Set[String], uniques: Set[String] )): (Set[String], Set[String]) =
+  let accumDuplicates(newName: String, ( dups, uniques ): ( Set[String], Set[String] )): (Set[String], Set[String]) =
     if Set.member(newName, uniques) then
       ( Set.insert(newName, dups), uniques )
     else
