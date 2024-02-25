@@ -1,9 +1,8 @@
 {
   "name": "Nar.Tests",
-  "version": "1.0",
-  "nar-version": "1.0",
-  "dependencies": [
-    "github.com/nar-lang/Nar.Base",
-    "github.com/nar-lang/Nar.Random"
-  ]
+  "version": 100,
+  "nar-version": 100,
+  "dependencies": {
+    "Nar.Base": 100
+  }
 }
