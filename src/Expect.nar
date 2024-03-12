@@ -166,7 +166,7 @@ def hidden equateWith(reason: String, comparison: (t1, t2): Bool, b: t2, a: t1):
     end
 
   let isFloat(x) =
-    isJust(String.toFloat(x)) && not(isJust(String.toInt(x)))
+    Debug.getType(x) == Debug.TypeFloat
 
   let usesFloats =
     isFloat(Debug.toString(a)) || isFloat(Debug.toString(b))
