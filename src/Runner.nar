@@ -107,10 +107,10 @@ def runDebugLogged(test: Test): TestResult =
   in
     let result = run(test)
     let _ = Debug.log(
+      stringifyResult(0, result),
       if isOk(result, True) then
-        "✅ Tests passed\n\n"
+        "\n\n✅ All tests passed"
       else
-        "⛔️ Tests failed\n\n",
-      stringifyResult(0, result)
+        "\n\n⛔️ Some tests failed\n\n"
     )
     in result
