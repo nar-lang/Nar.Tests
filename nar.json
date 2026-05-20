@@ -1,8 +1,7 @@
 {
   "name": "Nar.Tests",
-  "version": 100,
-  "nar-version": 100,
-  "dependencies": {
-    "Nar.Base": 100
-  }
+  "repository": "github.com/nar-lang/Nar.Tests",
+  "dependencies": [
+    "github.com/nar-lang/Nar.Base"
+  ]
 }
