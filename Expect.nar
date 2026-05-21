@@ -4,36 +4,36 @@ type Expectation
   = Pass
   | Fail(given: Maybe[String], description: String, reason: Reason)
 
-def hidden failWithReason(description: String, reason: Reason): Expectation =
+def hidden failWithReason(description: String, reason: Reason) -> Expectation =
   Fail(Nothing, description, reason)
 
-def hidden withGiven(newGiven: String, expectation: Expectation): Expectation =
+def hidden withGiven(newGiven: String, expectation: Expectation) -> Expectation =
   select expectation
-    case Fail(_, description, failure) ->
+    case Fail(_, description, failure) =>
       Fail(Just(newGiven), description, failure)
-    case Pass ->
+    case Pass =>
       expectation
   end
 
 def pass : Expectation =
     Pass
 
-def equal: (a, a): Expectation =
+def equal: (a, a) -> Expectation =
     equateWith("Expect.equal", (==))
 
-def notEqual: (a, a): Expectation =
+def notEqual: (a, a) -> Expectation =
     equateWith("Expect.notEqual", (!=))
 
-def lessThan: (cmp, cmp): Expectation =
+def lessThan: (cmp, cmp) -> Expectation =
     compareWith("Expect.lessThan", (<))
 
-def atMost: (cmp, cmp): Expectation =
+def atMost: (cmp, cmp) -> Expectation =
     compareWith("Expect.atMost", (<=))
 
-def greaterThan: (cmp, cmp): Expectation =
+def greaterThan: (cmp, cmp) -> Expectation =
     compareWith("Expect.greaterThan", (>))
 
-def atLeast: (cmp, cmp): Expectation =
+def atLeast: (cmp, cmp) -> Expectation =
     compareWith("Expect.atLeast", (>=))
 
 type FloatingPointTolerance
@@ -41,40 +41,40 @@ type FloatingPointTolerance
     | Relative(Float)
     | AbsoluteOrRelative(Float, Float)
 
-def within(tolerance: FloatingPointTolerance, lower: Float, upper: Float): Expectation =
+def within(tolerance: FloatingPointTolerance, lower: Float, upper: Float) -> Expectation =
   nonNegativeToleranceError(
     tolerance,
     "within",
     compareWith("Expect.within " <> Debug.toString(tolerance), withinCompare(tolerance), lower, upper))
 
-def notWithin(tolerance: FloatingPointTolerance, lower: Float, upper: Float): Expectation =
+def notWithin(tolerance: FloatingPointTolerance, lower: Float, upper: Float) -> Expectation =
   nonNegativeToleranceError(
     tolerance,
     "notWithin",
     compareWith(
       "Expect.notWithin " <> Debug.toString(tolerance),
-      \(a, b) -> not(withinCompare(tolerance, a, b)),
+      \(a, b) => not(withinCompare(tolerance, a, b)),
       lower,
       upper))
 
-def ok(result: Result[a,b]): Expectation =
+def ok(result: Result[a,b]) -> Expectation =
     select result
-        case Ok(_) ->
+        case Ok(_) =>
             pass
-        case Err(_) ->
+        case Err(_) =>
           failWithReason("Expect.ok", Comparison("Ok _", Debug.toString(result)))
     end
 
 
-def err(result: Result[a, b]): Expectation =
+def err(result: Result[a, b]) -> Expectation =
     select result
-        case Ok(_) ->
+        case Ok(_) =>
           failWithReason("Expect.err", Comparison("Err _", Debug.toString(result)))
-        case Err(_) ->
+        case Err(_) =>
             pass
     end
 
-def equalLists(expected: List[a], actual: List[a]): Expectation =
+def equalLists(expected: List[a], actual: List[a]) -> Expectation =
     if expected == actual then
         pass
     else
@@ -83,7 +83,7 @@ def equalLists(expected: List[a], actual: List[a]): Expectation =
           ListDiff(List.map(Debug.toString, expected), List.map(Debug.toString, actual))
         )
 
-def equalDicts(expected: Dict[cmp, a], actual: Dict[cmp, a]): Expectation =
+def equalDicts(expected: Dict[cmp, a], actual: Dict[cmp, a]) -> Expectation =
     if Dict.toList(expected) == Dict.toList(actual) then
         pass
     else
@@ -99,7 +99,7 @@ def equalDicts(expected: Dict[cmp, a], actual: Dict[cmp, a]): Expectation =
         in
           reportCollectionFailure("Expect.equalDicts", expected, actual, missingKeys, extraKeys)
 
-def equalSets(expected:Set[cmp], actual:Set[cmp]): Expectation =
+def equalSets(expected:Set[cmp], actual:Set[cmp]) -> Expectation =
     if Set.toList(expected) == Set.toList(actual) then
         pass
     else
@@ -112,18 +112,18 @@ def equalSets(expected:Set[cmp], actual:Set[cmp]): Expectation =
         in
           reportCollectionFailure("Expect.equalSets", expected, actual, missingKeys, extraKeys)
 
-def fail(str: String): Expectation =
+def fail(str: String) -> Expectation =
     failWithReason(str, Custom)
 
-def onFail(str: String, expectation: Expectation): Expectation =
+def onFail(str: String, expectation: Expectation) -> Expectation =
     select expectation
-      case Pass ->
+      case Pass =>
         expectation
-      case Fail(given, description, _) ->
+      case Fail(given, description, _) =>
         Fail(given, str, Custom)
     end
 
-def all(list:List[(subject):Expectation], query: subject): Expectation =
+def all(list:List[(subject) -> Expectation], query: subject) -> Expectation =
     if List.isEmpty(list) then
       failWithReason(
         "Expect.all was given an empty list. You must make at least one expectation to have a valid test!",
@@ -132,22 +132,22 @@ def all(list:List[(subject):Expectation], query: subject): Expectation =
     else
       allHelp(list, query)
 
-def hidden allHelp(list:List[(subject):Expectation], query: subject): Expectation =
+def hidden allHelp(list:List[(subject) -> Expectation], query: subject) -> Expectation =
   select list
-    case [] ->
+    case [] =>
       pass
-    case check | rest ->
+    case check | rest =>
       select check(query)
-        case Pass ->
+        case Pass =>
           allHelp(rest, query)
-        case outcome ->
+        case outcome =>
           outcome
       end
   end
 
 def hidden reportCollectionFailure(
   comparison: String, expected: a, actual: b, missingKeys: List[c], extraKeys: List[d]
-): Expectation =
+) -> Expectation =
   failWithReason(
     comparison,
     CollectionDiff(
@@ -158,11 +158,11 @@ def hidden reportCollectionFailure(
     )
   )
 
-def hidden equateWith(reason: String, comparison: (t1, t2): Bool, b: t2, a: t1): Expectation =
+def hidden equateWith(reason: String, comparison: (t1, t2) -> Bool, b: t2, a: t1) -> Expectation =
   let isJust(x) =
     select x
-      case Just(_) -> True
-      case Nothing -> False
+      case Just(_) => True
+      case Nothing => False
     end
 
   let isFloat(x) =
@@ -182,40 +182,40 @@ def hidden equateWith(reason: String, comparison: (t1, t2): Bool, b: t2, a: t1):
     else
      testWith(Equality, reason, comparison, b, a)
 
-def hidden compareWith: (String, (a,b):Bool, b, a): Expectation =
+def hidden compareWith: (String, (a,b) -> Bool, b, a) -> Expectation =
     testWith(Comparison)
 
 def hidden testWith(
-  makeReason: (String, String):Reason, label: String, runTest: (a, b):Bool, expected: b,  actual: a
-): Expectation =
+  makeReason: (String, String) -> Reason, label: String, runTest: (a, b) -> Bool, expected: b,  actual: a
+) -> Expectation =
   if runTest(actual, expected) then
     pass
   else
     failWithReason(label, makeReason(Debug.toString(expected), Debug.toString(actual)))
 
-def hidden absolute(tolerance: FloatingPointTolerance): Float =
+def hidden absolute(tolerance: FloatingPointTolerance) -> Float =
     select tolerance
-        case Absolute(val) ->
+        case Absolute(val) =>
             val
-        case AbsoluteOrRelative(val, _) ->
+        case AbsoluteOrRelative(val, _) =>
             val
-        case _ ->
+        case _ =>
             0
     end
 
-def hidden relative(tolerance: FloatingPointTolerance): Float =
+def hidden relative(tolerance: FloatingPointTolerance) -> Float =
     select tolerance
-        case Relative(val) ->
+        case Relative(val) =>
             val
-        case AbsoluteOrRelative(_, val) ->
+        case AbsoluteOrRelative(_, val) =>
             val
-        case _ ->
+        case _ =>
             0
     end
 
 def hidden nonNegativeToleranceError(
   tolerance: FloatingPointTolerance, name: String, result: Expectation
-): Expectation =
+) -> Expectation =
     if absolute(tolerance) < 0 && relative(tolerance) < 0 then
         fail("Expect." <> name <> " was given negative absolute and relative tolerances")
     else if absolute(tolerance) < 0 then
@@ -225,7 +225,7 @@ def hidden nonNegativeToleranceError(
     else
         result
 
-def hidden withinCompare(tolerance: FloatingPointTolerance, a: Float, b: Float): Bool =
+def hidden withinCompare(tolerance: FloatingPointTolerance, a: Float, b: Float) -> Bool =
     let withinAbsoluteTolerance =
             a - absolute(tolerance) <= b && b <= a + absolute(tolerance)
     let withinRelativeTolerance =

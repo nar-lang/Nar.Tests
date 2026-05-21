@@ -7,27 +7,27 @@ type TestResult
   | BatchResult(List[TestResult])
   | TestSkipped
 
-def run(test: Test): TestResult =
-  let isFailed(r: Expectation): Bool =
+def run(test: Test) -> TestResult =
+  let isFailed(r: Expectation) -> Bool =
         select r
-          case Expect.Pass -> False
-          case Expect.Fail(_,_,_) -> True
+          case Expect.Pass => False
+          case Expect.Fail(_,_,_) => True
         end
-  let skipTest(test: Test): TestResult =
+  let skipTest(test: Test) -> TestResult =
     select test
-      case UnitTest(_) -> TestSkipped
-      case BatchOfTests(subtests) ->
+      case UnitTest(_) => TestSkipped
+      case BatchOfTests(subtests) =>
         BatchResult(List.map(skipTest, subtests))
-      case LabeledTest(label, subtest) ->
+      case LabeledTest(label, subtest) =>
         LabeledResult(label, skipTest(subtest))
-      case OnlyTest(subtest) ->
+      case OnlyTest(subtest) =>
         skipTest(subtest)
-      case SkippedTest(subtest) ->
+      case SkippedTest(subtest) =>
         skipTest(subtest)
     end
-  let runTest(test: Test): TestResult =
+  let runTest(test: Test) -> TestResult =
     select test
-      case UnitTest(thunk) ->
+      case UnitTest(thunk) =>
         let failedTests = List.filter(isFailed, thunk( () ))
         in
           if List.isEmpty(failedTests) then
@@ -35,74 +35,86 @@ def run(test: Test): TestResult =
           else
             let toResult(expectation) =
               select expectation
-                case Fail(_, msg, reason) -> (msg, reason)
-                case _ -> ("should not happen", Custom)
+                case Fail(_, msg, reason) => (msg, reason)
+                case _ => ("should not happen", Custom)
               end
             in
               TestFailed(List.map(toResult, failedTests))
-      case BatchOfTests(subtests) ->
+      case BatchOfTests(subtests) =>
         BatchResult(List.map(runTest, subtests))
-      case LabeledTest(label, subtest) ->
+      case LabeledTest(label, subtest) =>
         LabeledResult(label, runTest(subtest))
-      case OnlyTest(subtest) ->
+      case OnlyTest(subtest) =>
         runTest(subtest)
-      case SkippedTest(subtest) ->
+      case SkippedTest(subtest) =>
         skipTest(subtest)
     end
-  let onlyTest(test: Test, found: Maybe[Test]): Maybe[Test] =
+  let onlyTest(test: Test, found: Maybe[Test]) -> Maybe[Test] =
     select found
-      case Just(_) -> found
-      case Nothing ->
+      case Just(_) => found
+      case Nothing =>
         select test
-          case UnitTest(_) -> Nothing
-          case BatchOfTests(subtests) -> List.foldl( onlyTest, found, subtests )
-          case LabeledTest(_, subtest) -> onlyTest(subtest, found)
-          case OnlyTest(subtest) -> Just(subtest)
-          case SkippedTest(_) -> Nothing
+          case UnitTest(_) => Nothing
+          case BatchOfTests(subtests) => List.foldl( onlyTest, found, subtests )
+          case LabeledTest(_, subtest) => onlyTest(subtest, found)
+          case OnlyTest(subtest) => Just(subtest)
+          case SkippedTest(_) => Nothing
         end
     end
   in
     select onlyTest(test, Nothing)
-      case Just(only) -> runTest(only)
-      case Nothing -> runTest(test)
+      case Just(only) => runTest(only)
+      case Nothing => runTest(test)
     end
 
-def native display(result:TestResult): TestResult
+def native display(result:TestResult) -> TestResult
 
-def runDisplayed: (Test): TestResult =
-  run ~> display
+def hidden resultToInt(result: TestResult) -> Int =
+  select result
+    case TestPassed => 0
+    case TestFailed(_) => 1
+    case LabeledResult(_, subresult) => resultToInt(subresult)
+    case BatchResult(subresults) => List.foldr(\res acc -> resultToInt(res) + acc, 0, subresults)
+    case TestSkipped => 0
+  end
 
-def runDebugLogged(test: Test): TestResult =
-  let stringifyResult(offset: Int, result: TestResult): String =
+alias hidden Main = (List[String]) -> Int
+
+def runDisplayed(test: Test) -> Main =
+  \_ => run(test) |> display |> resultToInt
+
+def runDebugLogged(test: Test) -> Main =
+  \_ ->
+  let stringifyResult(offset: Int, result: TestResult) -> String =
     let indent = String.repeat(offset, " ")
     in
       select result
-        case TestPassed -> indent <> "✅"
-        case TestFailed(failedTests) ->
+        case TestPassed => indent <> "✅"
+        case TestFailed(failedTests) =>
           let stringifyFailedTest((msg, reason)) =
             indent <> "❗️ " <> msg <> " " <> Reason.toString(reason)
           in
             String.join("\n", List.map(stringifyFailedTest, failedTests))
-        case LabeledResult(label, subresult) ->
+        case LabeledResult(label, subresult) =>
           select subresult
-            case TestPassed -> indent <> "✅ " <> label
-            case TestFailed(_) -> indent <> "⛔️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
-            case subtest -> indent <> "⚪️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
+            case TestPassed => indent <> "✅ " <> label
+            case TestFailed(_) => indent <> "⛔️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
+            case subtest => indent <> "⚪️ " <> label <> "\n" <> stringifyResult(offset + 1, subresult)
           end
-        case BatchResult(subresults) ->
+        case BatchResult(subresults) =>
           String.join("\n", List.map(stringifyResult(offset + 1), subresults))
-        case TestSkipped -> indent <> "Skipped"
+        case TestSkipped => indent <> "Skipped"
     end
-  let isOk(result: TestResult, passed: Bool): Bool =
+  let isOk(result: TestResult, passed: Bool) -> Bool =
     if not(passed) then
       False
     else
       select result
-        case TestPassed -> True
-        case TestFailed(_) -> False
-        case LabeledResult(_, subresult) -> isOk(subresult, passed)
-        case BatchResult(subresults) -> List.foldr(isOk, passed, subresults)
-        case TestSkipped -> True
+        case TestPassed => True
+        case TestFailed(_) => False
+        case LabeledResult(_, subresult) => isOk(subresult, passed)
+        case BatchResult(subresults) => List.foldr(isOk, passed, subresults)
+        case TestSkipped => True
       end
   in
     let result = run(test)
@@ -115,4 +127,5 @@ def runDebugLogged(test: Test): TestResult =
       resultString <> "\n\n" <> stringifyResult(0, result),
       "\n\n" <> resultString
     )
-    in result
+    in 
+    \_ => resultToInt(result)

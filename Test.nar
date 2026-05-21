@@ -1,28 +1,28 @@
 module Nar.Tests.Test
 
 type Test
-  = UnitTest(( () ): List[Expectation])
+  = UnitTest(( () ) -> List[Expectation])
   | BatchOfTests(List[Test])
   | LabeledTest(String, Test)
   | OnlyTest(Test)
   | SkippedTest(Test)
 
-def concat(tests: List[Test]): Test =
+def concat(tests: List[Test]) -> Test =
     if List.isEmpty(tests) then
       failNow("This `concat` has no tests in it. Let's give it some!", Invalid(EmptyList))
     else
       select duplicatedName(tests)
-        case Err(dups) ->
+        case Err(dups) =>
           let dupDescription(duped) =
             "A test group contains multiple tests named '" <> duped <>
               "'. Do some renaming so that tests have unique names."
           in
             failNow(String.join("\n", List.map(dupDescription, Set.toList(dups))), Invalid(DuplicatedName))
-        case Ok(_) ->
+        case Ok(_) =>
           BatchOfTests(tests)
       end
 
-def describe(untrimmedDesc: String, tests: List[Test]): Test =
+def describe(untrimmedDesc: String, tests: List[Test]) -> Test =
     let desc = String.trim(untrimmedDesc)
     in
       if String.isEmpty(desc) then
@@ -35,7 +35,7 @@ def describe(untrimmedDesc: String, tests: List[Test]): Test =
         Invalid(EmptyList))
     else
       select duplicatedName(tests)
-        case Err(dups) ->
+        case Err(dups) =>
           let dupDescription(duped) =
             "Contains multiple tests named '" <> duped <>
             "'. Let's rename them so we know which is which."
@@ -44,7 +44,7 @@ def describe(untrimmedDesc: String, tests: List[Test]): Test =
               failNow(
                 String.join("\n", List.map(dupDescription, Set.toList(dups))),
                 Invalid(DuplicatedName)))
-        case Ok(childrenNames) ->
+        case Ok(childrenNames) =>
           if Set.member(desc, childrenNames) then
             LabeledTest(desc,
               failNow(
@@ -55,33 +55,33 @@ def describe(untrimmedDesc: String, tests: List[Test]): Test =
             LabeledTest(desc, BatchOfTests(tests))
       end
 
-def test(untrimmedDesc: String, thunk: ( () ):Expectation): Test =
+def test(untrimmedDesc: String, thunk: ( () ) -> Expectation) -> Test =
   let desc = String.trim(untrimmedDesc)
   in
     if String.isEmpty(desc) then
       failNow("This test has a blank description. Let's give it a useful one!", Invalid(BadDescription))
     else
-      LabeledTest(desc, UnitTest(\(_) -> [ thunk( () ) ]))
+      LabeledTest(desc, UnitTest(\(_) => [ thunk( () ) ]))
 
-def todo(desc: String): Test =
+def todo(desc: String) -> Test =
   failNow(desc, TODO)
 
-def only: (Test): Test =
+def only: (Test) -> Test =
   OnlyTest
 
-def skip: (Test): Test =
+def skip: (Test) -> Test =
   SkippedTest
 
-def hidden duplicatedName(tests: List[Test]): Result[Set[String], Set[String]] =
-  let names(test:Test): List[String] =
+def hidden duplicatedName(tests: List[Test]) -> Result[Set[String], Set[String]] =
+  let names(test:Test) -> List[String] =
     select test
-      case LabeledTest(str, _) -> [ str ]
-      case BatchOfTests(subtests) -> List.concatMap(names, subtests)
-      case UnitTest(_) -> []
-      case SkippedTest(subTest) -> names(subTest)
-      case OnlyTest(subTest) -> names(subTest)
+      case LabeledTest(str, _) => [ str ]
+      case BatchOfTests(subtests) => List.concatMap(names, subtests)
+      case UnitTest(_) => []
+      case SkippedTest(subTest) => names(subTest)
+      case OnlyTest(subTest) => names(subTest)
     end
-  let accumDuplicates(newName: String, ( dups, uniques ): ( Set[String], Set[String] )): (Set[String], Set[String]) =
+  let accumDuplicates(newName: String, ( dups, uniques ): ( Set[String], Set[String] )) -> (Set[String], Set[String]) =
     if Set.member(newName, uniques) then
       ( Set.insert(newName, dups), uniques )
     else
@@ -95,5 +95,5 @@ def hidden duplicatedName(tests: List[Test]): Result[Set[String], Set[String]] =
     else
       Err(dupsAccum)
 
-def hidden failNow(msg: String, reason: Reason): Test =
-  UnitTest(\(_) -> [ Fail(Nothing, msg, reason) ])
+def hidden failNow(msg: String, reason: Reason) -> Test =
+  UnitTest(\(_) => [ Fail(Nothing, msg, reason) ])

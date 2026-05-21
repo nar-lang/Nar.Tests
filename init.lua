@@ -3,40 +3,12 @@
 local rt = require("lunar.runtime")
 
 local function display(result)
-    local function isOk(passed, result)
-        if not passed then return false end
-        local OK = rt.Object.ObjectKind
-        local name = result.name
-        if name == "Nar.Tests.Runner.TestResult#TestPassed" then
-            return true
-        elseif name == "Nar.Tests.Runner.TestResult#TestFailed" then
-            return false
-        elseif name == "Nar.Tests.Runner.TestResult#LabeledResult" then
-            return isOk(passed, result.values[2])
-        elseif name == "Nar.Tests.Runner.TestResult#BatchResult" then
-            local results = rt:toList(result.values[1])
-            local ok = passed
-            for _, r in ipairs(results) do
-                ok = isOk(ok, r)
-            end
-            return ok
-        elseif name == "Nar.Tests.Runner.TestResult#TestSkipped" then
-            return true
-        end
-        return false
-    end
-
-    local function showFailed(indent, msg, reason)
-        local strReason = rt:applyFunc(
-            rt.Object.makeFunc(rt.Object.getKind, 0),
-            {}
-        )
+    local function showFailed(indent, msg)
         io.write(indent .. "❗️ " .. rt:toString(msg) .. "\n")
     end
 
     local function show(offset, passed, result)
         local indent = string.rep("  ", offset)
-        local OK = rt.Object.ObjectKind
         local name = result.name
 
         if name == "Nar.Tests.Runner.TestResult#TestPassed" then
@@ -45,8 +17,8 @@ local function display(result)
         elseif name == "Nar.Tests.Runner.TestResult#TestFailed" then
             local failures = rt:toList(result.values[1])
             for _, f in ipairs(failures) do
-                local f_tuple = rt:toTuple(f)
-                showFailed(indent, f_tuple[1], f_tuple[2])
+                local fTuple = rt:toTuple(f)
+                showFailed(indent, fTuple[1])
             end
             return false
         elseif name == "Nar.Tests.Runner.TestResult#LabeledResult" then
