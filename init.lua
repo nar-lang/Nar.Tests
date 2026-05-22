@@ -1,6 +1,11 @@
 --- Nar.Tests native implementations (Lua).
 --- Provides test display and runner functionality.
-local rt = require("lunar.runtime")
+---
+--- Returns `function(rt)` so the host CLI wires natives into a specific
+--- runtime instance. `display` closes over the passed `rt`.
+local _ = require("lunar.runtime") -- ensure module is loadable / for typing
+
+return function(rt)
 
 local function display(result)
     local function showFailed(indent, msg)
@@ -61,3 +66,5 @@ local function display(result)
 end
 
 rt:registerDef("Nar.Tests.Runner", "display", display, 1)
+
+end -- return function(rt)

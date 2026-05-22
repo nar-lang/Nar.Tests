@@ -74,17 +74,17 @@ def hidden resultToInt(result: TestResult) -> Int =
     case TestPassed => 0
     case TestFailed(_) => 1
     case LabeledResult(_, subresult) => resultToInt(subresult)
-    case BatchResult(subresults) => List.foldr(\res acc -> resultToInt(res) + acc, 0, subresults)
+    case BatchResult(subresults) => List.foldr(\(res, acc) => resultToInt(res) + acc, 0, subresults)
     case TestSkipped => 0
   end
 
 alias hidden Main = (List[String]) -> Int
 
 def runDisplayed(test: Test) -> Main =
-  \_ => run(test) |> display |> resultToInt
+  \(_) => run(test) |> display |> resultToInt
 
 def runDebugLogged(test: Test) -> Main =
-  \_ ->
+  \(_) =>
   let stringifyResult(offset: Int, result: TestResult) -> String =
     let indent = String.repeat(offset, " ")
     in
@@ -128,4 +128,4 @@ def runDebugLogged(test: Test) -> Main =
       "\n\n" <> resultString
     )
     in 
-    \_ => resultToInt(result)
+    \(_) => resultToInt(result)
