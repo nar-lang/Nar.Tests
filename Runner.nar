@@ -128,4 +128,4 @@ def runDebugLogged(test: Test) -> Main =
       "\n\n" <> resultString
     )
     in 
-    \(_) => resultToInt(result)
+    resultToInt(result)
